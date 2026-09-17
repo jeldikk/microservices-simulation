@@ -1,0 +1,27 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 1
+      rampTo: 50
+      name: Warm up phase
+    # - duration: 600
+    #   arrivalRate: 50
+    #   rampTo: 100
+    #   name: Ramp up load
+    # - duration: 300
+    #   arrivalRate: 100
+    #   rampTo: 1000
+    #   name: Spike phase
+  plugins:
+    metrics-by-endpoint: {}
+    
+scenarios:
+  - name: "Get products"
+    flow:
+      - get:
+          url: "/api/products"
+  - name: "Get products with cache"
+    flow:
+      - get:
+          url: "/api/products/cache"

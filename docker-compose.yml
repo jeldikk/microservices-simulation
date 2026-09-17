@@ -1,0 +1,154 @@
+services:
+  api_service:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: api_service_container
+    restart: always
+    environment:
+      - PORT=3000
+      - MONGO_URI=mongodb://root:root@mongo_db:27017/products_db?authSource=admin
+    ports:
+      - "3000:3000"
+    depends_on:
+      mongo_db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  redis:
+    image: redis:latest
+    container_name: redis_container
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+  redis_insight:
+    image: redis/redisinsight:latest
+    container_name: redis_insight_container
+    restart: always
+    ports:
+      - "5540:5540"
+    volumes:
+      - redis-insight-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+  mongo_db:
+    image: mongo:8.3.11-noble
+    container_name: mongo_db_container
+    restart: always
+    ports:
+      - "37017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=root
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test:
+        ["CMD", "mongosh", "--eval", "db.adminCommand('ping').ok", "--quiet"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
+  mongo_express:
+    image: mongo-express:latest
+    container_name: mongo_express_container
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_URL=mongodb://root:root@mongo_db:27017/
+      - ME_CONFIG_BASICAUTH_USERNAME=root
+      - ME_CONFIG_BASICAUTH_PASSWORD=root
+      - ME_CONFIG_BASICAUTH_ENABLED=true
+    depends_on:
+      mongo_db:
+        condition: service_healthy
+
+  postgresql_db:
+    image: postgres:latest
+    container_name: postgresql_db_container
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=root
+      - POSTGRES_DB=products_db
+    volumes:
+      - postgresql-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "root"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin_container
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      postgresql_db:
+        condition: service_healthy
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus_container
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9090/-/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
+    # depends_on:
+    #   api_service:
+    #     condition: service_healthy
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana_container
+    restart: always
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      prometheus:
+        condition: service_healthy
+
+volumes:
+  redis-data:
+    driver: local
+  redis-insight-data:
+    driver: local
+  mongo-data:
+    driver: local
+  mongo-express-data:
+    driver: local
+  grafana-data:
+    driver: local
+  postgresql-data:
+    driver: local
+  pgadmin-data:
+    driver: local
